@@ -1,5 +1,6 @@
 import { xhrRequest } from '../internal/index.js';
 import findIndexOfString from './findIndexOfString.js';
+import pako from 'pako/index.js';
 
 function findBoundary(header) {
   for (let i = 0; i < header.length; i++) {
@@ -27,6 +28,17 @@ function uint8ArrayToString(data, offset, length) {
   }
 
   return str;
+}
+
+function isDeflated(buf) {
+  let result = false;
+
+  if (buf && buf.length >= 2) {
+    result =
+      buf[0] === 0x78 && (buf[1] === 1 || buf[1] === 0x9c || buf[1] === 0xda);
+  }
+
+  return result;
 }
 
 function getPixelData(uri, imageId, mediaType = 'application/octet-stream') {
@@ -67,11 +79,21 @@ function getPixelData(uri, imageId, mediaType = 'application/octet-stream') {
       // Remove \r\n from the length
       const length = endIndex - offset - 2;
 
+      const data = new Uint8Array(imageFrameAsArrayBuffer, offset, length);
+
+      let pxData;
+
+      if (isDeflated(data)) {
+        pxData = pako.inflate(data);
+      } else {
+        pxData = data;
+      }
+
       // return the info for this pixel data
       resolve({
         contentType: findContentType(split),
         imageFrame: {
-          pixelData: new Uint8Array(imageFrameAsArrayBuffer, offset, length),
+          pixelData: pxData,
         },
       });
     }, reject);
